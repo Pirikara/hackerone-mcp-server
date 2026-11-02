@@ -75,14 +75,14 @@ claude
 
 ### Report intents (drafts)
 
-Report intents are HackerOne's draft-report workflow: you create a draft, attach files, HackerOne runs analysis jobs on it (asset type, bug class, completeness), and then you submit it as a real report.
+Report intents are HackerOne's Report Assistant draft workflow: you provide a program and vulnerability description, attach files, HackerOne generates a title and analysis metadata, and then you submit it as a real report. These drafts are stored by HackerOne but do not appear in the normal Reports list until submitted. Review them at [hackerone.com/hai/report_assistant](https://hackerone.com/hai/report_assistant).
 
 | Tool | Description |
 |------|-------------|
-| `create_report_intent` | Create a draft report for a program, with optional bug-class/URL/parameter metadata |
+| `create_report_intent` | Create a Report Assistant draft from a program handle and description |
 | `list_report_intents` | List your drafts |
 | `get_report_intent` | Get one draft with its `state`, analysis job status, and attachments |
-| `update_report_intent` | Edit a draft's title, description, or metadata |
+| `update_report_intent` | Update a draft's description (HackerOne regenerates its title and metadata) |
 | `submit_report_intent` | Turn the draft (and its attachments) into a real report |
 | `delete_report_intent` | Delete an unsubmitted draft |
 | `list_report_intent_attachments` | List a draft's attachments |

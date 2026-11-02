@@ -397,7 +397,7 @@ server.tool(
 // ── Tool: list_report_intents ─────────────────────────────────────
 server.tool(
   "list_report_intents",
-  "List your report intents — draft reports that HackerOne analyzes (asset type, bug class, completeness) before you submit them.",
+  "List your Report Assistant drafts. These report intents are stored by HackerOne but do not appear in the normal Reports list until submitted. Open report_assistant_url to view them in the HackerOne UI.",
   {
     page_size: z
       .number()
@@ -414,7 +414,7 @@ server.tool(
 // ── Tool: get_report_intent ───────────────────────────────────────
 server.tool(
   "get_report_intent",
-  "Get a single report intent, including its state, analysis job status, metadata, and attachments. Check `state` is ready before submitting.",
+  "Get a single Report Assistant draft, including its state, analysis job status, generated metadata, program relationship, and attachments. Check `state` is ready_to_submit before submitting.",
   { report_intent_id: reportIntentId },
   async ({ report_intent_id }) => run(() => getReportIntent(report_intent_id))
 );
@@ -422,99 +422,30 @@ server.tool(
 // ── Tool: create_report_intent ────────────────────────────────────
 server.tool(
   "create_report_intent",
-  "Create a draft report (report intent) for a program. HackerOne runs analysis jobs on it; poll with get_report_intent, then call submit_report_intent to turn it into a real report.",
+  "Create a Report Assistant draft on HackerOne. The destination program must support Report Assistant. HackerOne generates the title and analysis metadata from the description. Poll with get_report_intent, open report_assistant_url to review it in the UI, then call submit_report_intent to turn it into a real report.",
   {
     program_handle: z
       .string()
       .describe("Program handle to draft against (e.g. 'uber')"),
-    title: z.string().describe("Draft report title"),
     description: z
       .string()
+      .min(1)
       .describe("Full vulnerability description in markdown"),
-    bug_class: z
-      .string()
-      .optional()
-      .describe("Bug class metadata (e.g. 'SSRF', 'XSS')"),
-    vulnerable_url: z
-      .string()
-      .optional()
-      .describe("Affected URL metadata"),
-    vulnerable_parameter: z
-      .string()
-      .optional()
-      .describe("Affected parameter metadata"),
-    http_method: z
-      .string()
-      .optional()
-      .describe("HTTP method metadata (e.g. 'GET', 'POST')"),
   },
-  async ({
-    program_handle,
-    title,
-    description,
-    bug_class,
-    vulnerable_url,
-    vulnerable_parameter,
-    http_method,
-  }) =>
-    run(() => {
-      const metadata = Object.fromEntries(
-        Object.entries({
-          bug_class,
-          vulnerable_url,
-          vulnerable_parameter,
-          http_method,
-        }).filter(([, v]) => v !== undefined)
-      );
-      return createReportIntent({
-        program_handle,
-        title,
-        description,
-        metadata: Object.keys(metadata).length ? metadata : undefined,
-      });
-    })
+  async ({ program_handle, description }) =>
+    run(() => createReportIntent({ program_handle, description }))
 );
 
 // ── Tool: update_report_intent ────────────────────────────────────
 server.tool(
   "update_report_intent",
-  "Update a draft report intent's title, description, or metadata before submitting it.",
+  "Update a Report Assistant draft's description. HackerOne regenerates the title and analysis metadata; those fields are read-only in the Hacker API.",
   {
     report_intent_id: reportIntentId,
-    title: z.string().optional().describe("New title"),
-    description: z.string().optional().describe("New description (markdown)"),
-    bug_class: z.string().optional().describe("Bug class metadata"),
-    vulnerable_url: z.string().optional().describe("Affected URL metadata"),
-    vulnerable_parameter: z
-      .string()
-      .optional()
-      .describe("Affected parameter metadata"),
-    http_method: z.string().optional().describe("HTTP method metadata"),
+    description: z.string().min(1).describe("New description (markdown)"),
   },
-  async ({
-    report_intent_id,
-    title,
-    description,
-    bug_class,
-    vulnerable_url,
-    vulnerable_parameter,
-    http_method,
-  }) =>
-    run(() => {
-      const metadata = Object.fromEntries(
-        Object.entries({
-          bug_class,
-          vulnerable_url,
-          vulnerable_parameter,
-          http_method,
-        }).filter(([, v]) => v !== undefined)
-      );
-      return updateReportIntent(report_intent_id, {
-        title,
-        description,
-        metadata: Object.keys(metadata).length ? metadata : undefined,
-      });
-    })
+  async ({ report_intent_id, description }) =>
+    run(() => updateReportIntent(report_intent_id, description))
 );
 
 // ── Tool: submit_report_intent ────────────────────────────────────
