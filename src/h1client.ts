@@ -750,18 +750,13 @@ export async function closeReport(reportId: string, message?: string) {
 }
 
 // ── Report intents (draft reports) ────────────────────────────────
-export interface ReportIntentMetadata {
-  bug_class?: string;
-  http_method?: string;
-  vulnerable_url?: string;
-  vulnerable_parameter?: string;
-  [key: string]: unknown;
-}
+const REPORT_ASSISTANT_URL = "https://hackerone.com/hai/report_assistant";
 
 function mapReportIntent(ri: any) {
   if (!ri) return null;
   const attrs = ri.attributes ?? {};
   const rels = ri.relationships ?? {};
+  const program = rels.program?.data;
   return {
     id: ri.id,
     type: ri.type,
@@ -772,9 +767,17 @@ function mapReportIntent(ri: any) {
     has_canceled_jobs: attrs.has_canceled_jobs ?? null,
     job_status_by_type: attrs.job_status_by_type ?? null,
     metadata: attrs.metadata ?? null,
-    program: rels.program?.data?.attributes?.handle ?? null,
+    program: program
+      ? {
+          id: program.id ?? null,
+          type: program.type ?? "program",
+          handle: program.attributes?.handle ?? null,
+          name: program.attributes?.name ?? null,
+        }
+      : null,
     report_id: rels.report?.data?.id ?? null,
     attachments: (rels.attachments?.data ?? []).map(mapAttachment),
+    report_assistant_url: REPORT_ASSISTANT_URL,
   };
 }
 
@@ -806,40 +809,37 @@ export async function getReportIntent(reportIntentId: string) {
 
 export async function createReportIntent(opts: {
   program_handle: string;
-  title: string;
   description: string;
-  metadata?: ReportIntentMetadata;
 }) {
-  const attributes: Record<string, any> = {
-    team_handle: opts.program_handle,
-    title: opts.title,
-    description: opts.description,
-  };
-  if (opts.metadata) attributes.metadata = opts.metadata;
-
   const result = await h1Request("POST", "/hackers/report_intents", {
-    body: { data: { type: "report-intent", attributes } },
+    body: {
+      data: {
+        type: "report-intent",
+        attributes: {
+          team_handle: opts.program_handle,
+          description: opts.description,
+        },
+      },
+    },
   });
   return mapReportIntent(result.data);
 }
 
 export async function updateReportIntent(
   reportIntentId: string,
-  opts: {
-    title?: string;
-    description?: string;
-    metadata?: ReportIntentMetadata;
-  }
+  description: string
 ) {
-  const attributes: Record<string, any> = {};
-  if (opts.title !== undefined) attributes.title = opts.title;
-  if (opts.description !== undefined) attributes.description = opts.description;
-  if (opts.metadata !== undefined) attributes.metadata = opts.metadata;
-
   const result = await h1Request(
     "PATCH",
     `/hackers/report_intents/${reportIntentId}`,
-    { body: { data: { type: "report-intent", attributes } } }
+    {
+      body: {
+        data: {
+          type: "report-intent",
+          attributes: { description },
+        },
+      },
+    }
   );
   return mapReportIntent(result.data);
 }
@@ -854,8 +854,19 @@ export async function submitReportIntent(reportIntentId: string) {
     "POST",
     `/hackers/report_intents/${reportIntentId}/submit`
   );
-  const intent = mapReportIntent(result.data);
-  const reportId = intent?.report_id ?? result.data?.id;
+  let intent = mapReportIntent(result.data);
+  if (!intent?.report_id) {
+    // The documented submit response may omit relationships. Refresh the intent
+    // so we can return the actual report ID instead of confusing it with the
+    // report-intent ID.
+    try {
+      intent = (await getReportIntent(reportIntentId)) ?? intent;
+    } catch {
+      // Submission already succeeded; a failed enrichment read must not turn it
+      // into an apparent submission failure.
+    }
+  }
+  const reportId = intent?.report_id;
   return {
     ...intent,
     url: reportId ? `https://hackerone.com/reports/${reportId}` : null,
